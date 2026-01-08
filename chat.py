@@ -1,58 +1,36 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter
+from pydantic import BaseModel
 from openai import OpenAI
 import os
-
-from database import get_db
-from models import User, Memory
 
 router = APIRouter()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-SYSTEM_PROMPT_FREE = """
-You are TestimAI, created by Anderson Testimony.
-You analyze messages and give basic scam and risk advice.
-Be concise.
-"""
+# Temporary in-memory store (we upgrade later)
+conversation_memory = {}
 
-SYSTEM_PROMPT_PRO = """
-You are TestimAI PRO, created by Anderson Testimony.
-You deeply analyze messages, detect scams, risks, manipulation,
-and give step-by-step actionable advice.
-Be detailed and precise.
-"""
-
-
-def get_current_user(db: Session = Depends(get_db)):
-    # TEMP: single-user fallback
-    # JWT validation will be added in deployment
-    user = db.query(User).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="No user found")
-    return user
-
+class ChatRequest(BaseModel):
+    message: str
+    user_id: str = "guest"
 
 @router.post("/")
-def chat(message: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    prompt = SYSTEM_PROMPT_PRO if user.is_pro else SYSTEM_PROMPT_FREE
+def chat(req: ChatRequest):
+    history = conversation_memory.get(req.user_id, [])
+
+    history.append({"role": "user", "content": req.message})
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": message}
+            {"role": "system", "content": "You are TestimAI, an expert at scam detection and problem analysis."},
+            *history
         ]
     )
 
     reply = response.choices[0].message.content
+    history.append({"role": "assistant", "content": reply})
 
-    memory = Memory(
-        user_id=user.id,
-        user_message=message,
-        ai_response=reply
-    )
-    db.add(memory)
-    db.commit()
+    conversation_memory[req.user_id] = history[-10:]  # keep last 10 messages
 
-    return {"reply": reply, "pro": user.is_pro}
+    return {"reply": reply}
