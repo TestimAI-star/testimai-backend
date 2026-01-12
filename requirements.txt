@@ -1,9 +1,10 @@
 fastapi
 uvicorn
-openai
+openai>=1.30.0
 python-dotenv
 requests
 sqlalchemy
 psycopg2-binary
 passlib[bcrypt]
 python-jose
+python-multipart
