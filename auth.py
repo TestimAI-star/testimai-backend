@@ -4,7 +4,9 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User
 from passlib.context import CryptContext
-import jwt, os
+from jose import JWTError, jwt
+import os
+
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
