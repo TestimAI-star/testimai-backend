@@ -78,3 +78,27 @@ def chat(
         db.commit()
 
     return {"reply": reply}
+
+    #history
+    @router.get("/history")
+def chat_history(
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None)
+):
+    user_id = get_user_id_from_token(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Login required")
+
+    records = (
+        db.query(ChatMemory)
+        .filter(ChatMemory.user_id == user_id)
+        .order_by(ChatMemory.id.desc())
+        .limit(50)
+        .all()
+    )
+
+    return [
+        {"user": r.message, "assistant": r.response}
+        for r in reversed(records)
+    ]
+
