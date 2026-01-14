@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from openai import OpenAI
-import os
+import os, time
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 
 from database import get_db, ChatMemory
+from models import User
 
 router = APIRouter()
 
@@ -16,14 +17,21 @@ JWT_ALGO = os.getenv("JWT_ALGORITHM")
 
 SYSTEM_PROMPT = "You are TestimAI, an expert in scam detection."
 
-# In-memory guest limiter (simple & free)
-guest_message_count = {}
+# -------------------------
+# RATE LIMIT STORAGE
+# -------------------------
+guest_message_count = {}   # guest_id -> count
+user_rate_limit = {}       # user_id -> timestamps
+
 
 class ChatRequest(BaseModel):
     message: str
     guest_id: str | None = None
 
 
+# -------------------------
+# AUTH HELPER
+# -------------------------
 def get_user_id_from_token(auth: str | None):
     if not auth:
         return None
@@ -35,6 +43,9 @@ def get_user_id_from_token(auth: str | None):
         return None
 
 
+# -------------------------
+# MAIN CHAT
+# -------------------------
 @router.post("/")
 def chat(
     req: ChatRequest,
@@ -44,7 +55,7 @@ def chat(
     user_id = get_user_id_from_token(authorization)
 
     # -------------------------
-    # GUEST LIMIT
+    # GUEST LIMIT (1 FREE MSG)
     # -------------------------
     if not user_id:
         gid = req.guest_id or "anon"
@@ -56,11 +67,45 @@ def chat(
         guest_message_count[gid] = count + 1
 
     # -------------------------
-    # CHAT LOGIC
+    # USER RATE LIMIT
+    # -------------------------
+    if user_id:
+        now = time.time()
+        hits = user_rate_limit.get(user_id, [])
+        hits = [t for t in hits if now - t < 60]  # 1 minute window
+
+        user = db.query(User).get(user_id)
+        limit = 100 if user and user.is_pro else 20
+
+        if len(hits) >= limit:
+            raise HTTPException(status_code=429, detail="Too many requests")
+
+        hits.append(now)
+        user_rate_limit[user_id] = hits
+
+    # -------------------------
+    # LOAD MEMORY (LOGGED IN)
     # -------------------------
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    if user_id:
+        memory = (
+            db.query(ChatMemory)
+            .filter(ChatMemory.user_id == user_id)
+            .order_by(ChatMemory.id.desc())
+            .limit(5)
+            .all()
+        )
+
+        for m in reversed(memory):
+            messages.append({"role": "user", "content": m.message})
+            messages.append({"role": "assistant", "content": m.response})
+
     messages.append({"role": "user", "content": req.message})
 
+    # -------------------------
+    # OPENAI CALL
+    # -------------------------
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=messages
@@ -68,7 +113,9 @@ def chat(
 
     reply = response.choices[0].message.content
 
-    # Save memory if logged in
+    # -------------------------
+    # SAVE MEMORY
+    # -------------------------
     if user_id:
         db.add(ChatMemory(
             user_id=user_id,
@@ -79,13 +126,17 @@ def chat(
 
     return {"reply": reply}
 
-    #history
-    @router.get("/history")
+
+# -------------------------
+# CHAT HISTORY
+# -------------------------
+@router.get("/history")
 def chat_history(
     db: Session = Depends(get_db),
     authorization: str | None = Header(None)
 ):
     user_id = get_user_id_from_token(authorization)
+
     if not user_id:
         raise HTTPException(status_code=401, detail="Login required")
 
@@ -101,4 +152,3 @@ def chat_history(
         {"user": r.message, "assistant": r.response}
         for r in reversed(records)
     ]
-
