@@ -5,8 +5,7 @@ import os
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 
-from database import get_db
-from models import ChatMemory   # ✅ NOW CORRECT
+from database import get_db, ChatMemory
 
 router = APIRouter()
 
@@ -15,15 +14,14 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 JWT_SECRET = os.getenv("JWT_SECRET")
 JWT_ALGO = os.getenv("JWT_ALGORITHM")
 
-SYSTEM_PROMPT = """
-You are TestimAI, an expert in scam detection, fraud analysis,
-and problem solving. Be clear, calm, and helpful.
-Learn from previous conversations when possible.
-"""
+SYSTEM_PROMPT = "You are TestimAI, an expert in scam detection."
 
+# In-memory guest limiter (simple & free)
+guest_message_count = {}
 
 class ChatRequest(BaseModel):
     message: str
+    guest_id: str | None = None
 
 
 def get_user_id_from_token(auth: str | None):
@@ -45,22 +43,22 @@ def chat(
 ):
     user_id = get_user_id_from_token(authorization)
 
-    memory_records = []
-    if user_id:
-        memory_records = (
-            db.query(ChatMemory)
-            .filter(ChatMemory.user_id == user_id)
-            .order_by(ChatMemory.id.desc())
-            .limit(5)
-            .all()
-        )
+    # -------------------------
+    # GUEST LIMIT
+    # -------------------------
+    if not user_id:
+        gid = req.guest_id or "anon"
+        count = guest_message_count.get(gid, 0)
 
+        if count >= 1:
+            return {"auth_required": True}
+
+        guest_message_count[gid] = count + 1
+
+    # -------------------------
+    # CHAT LOGIC
+    # -------------------------
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-
-    for record in reversed(memory_records):
-        messages.append({"role": "user", "content": record.message})
-        messages.append({"role": "assistant", "content": record.response})
-
     messages.append({"role": "user", "content": req.message})
 
     response = client.chat.completions.create(
@@ -70,6 +68,7 @@ def chat(
 
     reply = response.choices[0].message.content
 
+    # Save memory if logged in
     if user_id:
         db.add(ChatMemory(
             user_id=user_id,
@@ -78,8 +77,4 @@ def chat(
         ))
         db.commit()
 
-    return {
-        "reply": reply,
-        "user": "logged_in" if user_id else "guest",
-        "memory_used": len(memory_records)
-    }
+    return {"reply": reply}
