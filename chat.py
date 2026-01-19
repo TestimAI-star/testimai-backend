@@ -6,8 +6,9 @@ import os, time
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 
-from database import get_db, ChatMemory
-from models import User
+from database import get_db
+from models import ChatMemory, User
+
 
 router = APIRouter()
 
