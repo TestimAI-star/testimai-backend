@@ -6,8 +6,10 @@ import models
 
 from auth import router as auth_router
 from chat import router as chat_router
+from payments import router as payments_router
+from webhooks import router as webhooks_router
 
-# Create tables ON STARTUP
+# CREATE TABLES
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -23,8 +25,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ROUTES
 app.include_router(auth_router, prefix="/auth")
 app.include_router(chat_router, prefix="/chat")
+app.include_router(payments_router, prefix="/payments")
+app.include_router(webhooks_router, prefix="/webhooks")
 
 
 @app.get("/")
