@@ -22,23 +22,28 @@ class ChatReq(BaseModel):
     message: str
     guest_id: str | None = None
 
-def get_user(auth):
+def get_user_id(auth: str | None):
     if not auth:
         return None
     try:
         token = auth.replace("Bearer ", "")
-        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])["user_id"]
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
+        return payload["user_id"]
     except:
         return None
 
-@router.post("/chat-stream")
-def chat(req: ChatReq, db: Session = Depends(get_db), authorization: str = Header(None)):
-    user_id = get_user(authorization)
+@router.post("/stream")
+def chat_stream(
+    req: ChatReq,
+    db: Session = Depends(get_db),
+    authorization: str = Header(None)
+):
+    user_id = get_user_id(authorization)
 
     if not user_id:
         gid = req.guest_id or "anon"
         if guest_limit.get(gid, 0) >= 1:
-            return StreamingResponse(iter(["Please sign in to continue."]))
+            return StreamingResponse(iter(["AUTH_REQUIRED"]))
         guest_limit[gid] = 1
 
     if user_id:
@@ -55,8 +60,10 @@ def chat(req: ChatReq, db: Session = Depends(get_db), authorization: str = Heade
         hits.append(now)
         user_hits[user_id] = hits
 
-    messages = [{"role": "system", "content": "You are TestimAI, an expert in scam detection."}]
-    messages.append({"role": "user", "content": req.message})
+    messages = [
+        {"role": "system", "content": "You are TestimAI, an expert in scam detection."},
+        {"role": "user", "content": req.message}
+    ]
 
     def stream():
         full = ""
@@ -65,13 +72,18 @@ def chat(req: ChatReq, db: Session = Depends(get_db), authorization: str = Heade
             messages=messages,
             stream=True
         ):
-            if chunk.choices[0].delta.get("content"):
-                text = chunk.choices[0].delta["content"]
+            delta = chunk.choices[0].delta
+            if delta and delta.get("content"):
+                text = delta["content"]
                 full += text
                 yield text
 
         if user_id:
-            db.add(ChatMemory(user_id=user_id, message=req.message, response=full))
+            db.add(ChatMemory(
+                user_id=user_id,
+                message=req.message,
+                response=full
+            ))
             db.commit()
 
     return StreamingResponse(stream(), media_type="text/plain")
