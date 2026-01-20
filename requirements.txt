@@ -1,10 +1,20 @@
 fastapi
-uvicorn
-openai>=1.30.0
+uvicorn[standard]
 python-dotenv
-requests
+
+# Database
 sqlalchemy
 psycopg2-binary
+
+# Auth & Security
+python-jose[cryptography]
 passlib[bcrypt]
-python-jose
+
+# Payments
+requests
+
+# AI
+openai>=1.30.0
+
+# Forms / uploads (needed by FastAPI even if not obvious)
 python-multipart
