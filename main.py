@@ -1,18 +1,21 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database import Base, engine
+
 from auth import router as auth
 from chat import router as chat
 from payments import router as payments
 from webhooks import router as webhooks
 
-# Base.metadata.create_all(bind=engine)
-
 app = FastAPI(title="TestimAI Backend")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://testimai-frontend.onrender.com",
+        "http://localhost:5500",
+        "http://127.0.0.1:5500"
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -32,3 +35,4 @@ def root():
 @app.get("/health")
 def health():
     return {"ok": True}
+
