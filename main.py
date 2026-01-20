@@ -6,7 +6,7 @@ from chat import router as chat
 from payments import router as payments
 from webhooks import router as webhooks
 
-Base.metadata.create_all(bind=engine)
+# Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="TestimAI Backend")
 
