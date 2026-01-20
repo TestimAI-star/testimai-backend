@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, HTTPException
 import requests, os
 from database import get_db
 from models import User
@@ -11,7 +11,11 @@ JWT_SECRET = os.getenv("JWT_SECRET")
 JWT_ALGO = os.getenv("JWT_ALGORITHM")
 
 @router.post("/verify")
-def verify_payment(reference: str, authorization: str = Header(...), db=Depends(get_db)):
+def verify_payment(
+    reference: str,
+    authorization: str = Header(...),
+    db=Depends(get_db)
+):
     token = authorization.replace("Bearer ", "")
     payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
     user_id = payload["user_id"]
@@ -23,11 +27,10 @@ def verify_payment(reference: str, authorization: str = Header(...), db=Depends(
 
     data = res.json()
 
-    if data["data"]["status"] == "success":
+    if data.get("data", {}).get("status") == "success":
         user = db.query(User).get(user_id)
         user.is_pro = True
         db.commit()
         return {"status": "pro_activated"}
 
-    return {"status": "failed"}
-
+    raise HTTPException(400, "Payment not verified")
