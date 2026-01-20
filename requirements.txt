@@ -9,6 +9,7 @@ psycopg2-binary
 # Auth & Security
 python-jose[cryptography]
 passlib[bcrypt]
+email-validator
 
 # Payments
 requests
@@ -16,5 +17,5 @@ requests
 # AI
 openai>=1.30.0
 
-# Forms / uploads (needed by FastAPI even if not obvious)
+# Forms / uploads
 python-multipart
