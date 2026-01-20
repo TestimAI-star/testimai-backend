@@ -22,3 +22,16 @@ app.include_router(auth, prefix="/auth")
 app.include_router(chat, prefix="/chat")
 app.include_router(payments, prefix="/payments")
 app.include_router(webhooks, prefix="/webhooks")
+
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/")
+def root():
+    return {
+        "status": "ok",
+        "service": "TestimAI Backend",
+        "message": "Backend is running"
+    }
+
