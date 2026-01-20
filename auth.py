@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from database import get_db
@@ -28,7 +29,10 @@ def create_token(user_id: int):
 @router.post("/signup")
 def signup(data: AuthIn, db: Session = Depends(get_db)):
     if db.query(User).filter(User.email == data.email).first():
-        raise HTTPException(400, "Email already exists")
+        return JSONResponse(
+            status_code=400,
+            content={"detail": "Email already exists"}
+        )
 
     user = User(
         email=data.email,
@@ -48,7 +52,10 @@ def login(data: AuthIn, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
 
     if not user or not pwd.verify(data.password, user.password):
-        raise HTTPException(401, "Invalid credentials")
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Invalid credentials"}
+        )
 
     return {
         "token": create_token(user.id),
