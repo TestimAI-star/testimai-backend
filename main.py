@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import Base, engine
-import models
 from auth import router as auth
 from chat import router as chat
 from payments import router as payments
@@ -9,29 +8,27 @@ from webhooks import router as webhooks
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI()
+app = FastAPI(title="TestimAI Backend")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten later
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(auth, prefix="/auth")
-app.include_router(chat, prefix="/chat")
-app.include_router(payments, prefix="/payments")
-app.include_router(webhooks, prefix="/webhooks")
-
-from fastapi import FastAPI
-
-app = FastAPI()
+app.include_router(auth, prefix="/auth", tags=["Auth"])
+app.include_router(chat, prefix="/chat", tags=["Chat"])
+app.include_router(payments, prefix="/payments", tags=["Payments"])
+app.include_router(webhooks, prefix="/webhooks", tags=["Webhooks"])
 
 @app.get("/")
 def root():
     return {
         "status": "ok",
-        "service": "TestimAI Backend",
-        "message": "Backend is running"
+        "service": "TestimAI Backend"
     }
 
+@app.get("/health")
+def health():
+    return {"ok": True}
