@@ -1,5 +1,4 @@
-from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from database import get_db
@@ -13,7 +12,10 @@ router = APIRouter()
 pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 JWT_SECRET = os.getenv("JWT_SECRET")
-JWT_ALGO = os.getenv("JWT_ALGORITHM")
+JWT_ALGO = os.getenv("JWT_ALGORITHM", "HS256")
+
+if not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET is not set")
 
 class AuthIn(BaseModel):
     email: EmailStr
@@ -28,15 +30,14 @@ def create_token(user_id: int):
 
 @router.post("/signup")
 def signup(data: AuthIn, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.email == data.email).first():
-        return JSONResponse(
-            status_code=400,
-            content={"detail": "Email already exists"}
-        )
+    existing = db.query(User).filter(User.email == data.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already exists")
 
     user = User(
         email=data.email,
-        password=pwd.hash(data.password)
+        password=pwd.hash(data.password),
+        is_pro=False
     )
     db.add(user)
     db.commit()
@@ -52,10 +53,7 @@ def login(data: AuthIn, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
 
     if not user or not pwd.verify(data.password, user.password):
-        return JSONResponse(
-            status_code=401,
-            content={"detail": "Invalid credentials"}
-        )
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
     return {
         "token": create_token(user.id),
