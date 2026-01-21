@@ -1,6 +1,5 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
 
 from auth import router as auth
 from chat import router as chat
@@ -9,28 +8,19 @@ from webhooks import router as webhooks
 
 app = FastAPI(title="TestimAI Backend")
 
+# ✅ CORRECT CORS CONFIG (RENDER + BROWSER SAFE)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://testimai-frontend.onrender.com",
-        "http://localhost:5500",
-        "http://127.0.0.1:5500",
+        "https://testimai-frontend.onrender.com"
     ],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=[
-        "Authorization",
-        "Content-Type",
-        "Accept",
-        "Origin",
-        "X-Requested-With",
-    ],
+    allow_credentials=False,  # 🔥 MUST be False (you use Bearer tokens, not cookies)
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# 🔑 THIS HANDLES PREFLIGHT PROPERLY (CRITICAL)
-@app.options("/{path:path}")
-async def options_handler(path: str, request: Request):
-    return Response(status_code=200)
+# ❌ DO NOT ADD MANUAL OPTIONS HANDLER
+# CORSMiddleware already handles preflight correctly
 
 app.include_router(auth, prefix="/auth", tags=["Auth"])
 app.include_router(chat, prefix="/chat", tags=["Chat"])
