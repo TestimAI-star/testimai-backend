@@ -5,17 +5,14 @@ from database import get_db
 from models import User
 from passlib.context import CryptContext
 from jose import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 
 router = APIRouter()
 pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 JWT_SECRET = os.getenv("JWT_SECRET")
-JWT_ALGO = os.getenv("JWT_ALGORITHM", "HS256")
-
-if not JWT_SECRET:
-    raise RuntimeError("JWT_SECRET is not set")
+JWT_ALGO = "HS256"
 
 class AuthIn(BaseModel):
     email: EmailStr
@@ -24,38 +21,24 @@ class AuthIn(BaseModel):
 def create_token(user_id: int):
     payload = {
         "user_id": user_id,
-        "exp": datetime.utcnow() + timedelta(hours=24)
+        "exp": datetime.now(timezone.utc) + timedelta(hours=24)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGO)
 
 @router.post("/signup")
 def signup(data: AuthIn, db: Session = Depends(get_db)):
-    existing = db.query(User).filter(User.email == data.email).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already exists")
+    if db.query(User).filter(User.email == data.email).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
 
-    user = User(
-        email=data.email,
-        password=pwd.hash(data.password),
-        is_pro=False
-    )
+    user = User(email=data.email, password=pwd.hash(data.password))
     db.add(user)
     db.commit()
     db.refresh(user)
-
-    return {
-        "token": create_token(user.id),
-        "is_pro": False
-    }
+    return {"token": create_token(user.id), "is_pro": False}
 
 @router.post("/login")
 def login(data: AuthIn, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
-
     if not user or not pwd.verify(data.password, user.password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    return {
-        "token": create_token(user.id),
-        "is_pro": user.is_pro
-    }
+    return {"token": create_token(user.id), "is_pro": user.is_pro}
