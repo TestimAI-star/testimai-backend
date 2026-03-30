@@ -18,7 +18,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create tables on startup
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
@@ -32,8 +31,7 @@ app.include_router(webhooks, prefix="/webhooks")
 def home():
     return {"message": "TestimAI Online", "status": "Secure"}
 
-# --- CRITICAL RENDER FIX ---
+# This block is the "Render Secret Sauce" for Python 3.13
 if __name__ == "__main__":
-    # Render provides the port via an environment variable
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
