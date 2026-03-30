@@ -1,18 +1,31 @@
+import os
+import httpx
+from openai import OpenAI, DefaultHttpxClient
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from jose import jwt
-import os, time
-from openai import OpenAI
+import time
 
 from database import get_db
 from models import ChatMemory, User
 
 router = APIRouter()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# --- FIX FOR PYTHON 3.13 TYPEERROR ---
+# We manually create a client that doesn't trigger the 'proxies' error
+http_client = DefaultHttpxClient()
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    http_client=http_client
+)
+# -------------------------------------
 
 JWT_SECRET = os.getenv("JWT_SECRET")
+# ... (rest of your chat.py code)
+
+
 JWT_ALGO = os.getenv("JWT_ALGORITHM", "HS256")
 
 # --- 🛡️ ANTI-HACK SHIELD SETTINGS ---
