@@ -2,21 +2,19 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 
-# Get URL from Render Environment Variables
+# Get the URL from your Render Env Vars
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# AUTO-FIX: Render uses postgres:// but SQLAlchemy 1.4+ needs postgresql://
+# AUTO-FIX: Convert postgres:// to postgresql:// if needed
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# Fallback for local testing if no DB is found
-if not DATABASE_URL:
-    DATABASE_URL = "sqlite:///./testim.db"
-
+# Render External Connections REQUIRE sslmode=require
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,
-    pool_recycle=300
+    connect_args={"sslmode": "require"},  # This is the "magic" line for Render
+    pool_pre_ping=True,                   # Checks if connection is alive before using it
+    pool_recycle=300                      # Refreshes connections every 5 mins
 )
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
